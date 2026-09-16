@@ -377,7 +377,7 @@ function App() {
           ) : page === "Analytics" ? (
             <Analytics run={run} revision={revision} />
           ) : page === "GIS Command" ? (
-            <GIS videos={videos} run={run} openVideo={openVideo} />
+            <GIS videos={videos} run={run} openVideo={openVideo} openCamera={openCamera} />
           ) : page === "Administration" ? (
             <Admin {...{ run, can, health, videos, jobs }} />
           ) : page === "Demo Control" ? (
@@ -872,6 +872,8 @@ function Vision({
     );
   return (
     <>
+      {page === "Tracking" && <p className="notice">Tracking follows every detected object through the video and shows how long each person or vehicle remains visible. Select a box to inspect its path.</p>}
+      {page === "Convoy Analysis" && <p className="notice">Convoy analysis adds designated vehicle roles, route progress, spacing and traffic delay alerts. Select a vehicle box in a Convoy run to designate it.</p>}
       <div className="toolbar">
         <select
           aria-label="Video source"
@@ -1118,6 +1120,7 @@ function Vision({
                             >
                               {o.track_id} · {o.object_class.toUpperCase()} ·{" "}
                               {Math.round(o.confidence * 100)}%
+                              {o.object_class === "person" && ` · ${clock(o.observed_seconds ?? o.duration)} observed`}
                               {o.speed_kmh != null && ` · ${kmh(o.speed_kmh)}`}
                               {cv ? " · CONVOY" : ""}
                             </text>
@@ -2676,6 +2679,10 @@ const CAMERA_DEFAULT = {
 };
 function Live({ run, can, openEvent, cameraId, setCameraId }) {
   const [cameras, setCameras] = useState([]),
+    [watchlist, setWatchlist] = useState([]),
+    [watchLabel, setWatchLabel] = useState(""),
+    [watchTrack, setWatchTrack] = useState(""),
+    [cameraLocation, setCameraLocation] = useState({name:"",latitude:9.03,longitude:38.74}),
     [adding, setAdding] = useState(false),
     [form, setForm] = useState(CAMERA_DEFAULT),
     [heat, setHeat] = useState(false),
@@ -2698,6 +2705,17 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
       setCameraId(cameras[0].id);
   }, [cameras]);
   const cam = cameras.find((c) => c.id === cameraId);
+  useEffect(() => {
+    if (!cam) { setWatchlist([]); return; }
+    const refresh = () => api(`/cameras/${cam.id}/watchlist`).then(setWatchlist).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, [cam?.id]);
+  useEffect(() => {
+    if (cam?.location?.name) setCameraLocation(cam.location);
+    else setCameraLocation({name:"",latitude:9.03,longitude:38.74});
+  }, [cam?.id, cam?.location?.name]);
   useEffect(() => {
     if (!cam) return;
     const loadEvents = () =>
@@ -2856,6 +2874,21 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
           </p>
         </Panel>
       )}
+      {cameras.length > 0 && (
+        <Panel title={`All camera feeds · ${cameras.length}`}>
+          <div className="camera-grid">
+            {cameras.map((c) => (
+              <button className={`camera-tile ${c.id === cameraId ? "selected" : ""}`} key={c.id} onClick={() => setCameraId(c.id)}>
+                <div className="camera-tile-image">
+                  {c.enabled ? <img src={`/api/cameras/${c.id}/stream?session=${c.status?.job_id || ""}`} alt={`${c.name} feed`} loading="lazy" /> : <span>Camera stopped</span>}
+                </div>
+                <strong>{c.name}</strong>
+                <small>{c.location?.name || "Location not set"} · {c.mode} · {c.state}</small>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
       {!cam ? (
         <Empty>Add an RTSP or stream URL to start live analysis.</Empty>
       ) : (
@@ -2994,6 +3027,8 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
                 ["TRACKS THIS SESSION", summary.total_objects],
               ]}
             />
+            {cam.mode === "Traffic" && <p className="notice">Traffic mode measures vehicle flow, speed and congestion across the full scene.</p>}
+            {cam.mode === "Convoy" && <p className="notice">Convoy mode follows designated vehicles, their route progress, spacing and delay alerts.</p>}
             {(summary.zones || []).length > 0 && (
               <Panel title="Zone & line counts">
                 <ZoneCounts zones={summary.zones} />
@@ -3005,6 +3040,7 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
               </Panel>
             )}
             <Panel title="Recent camera events">
+              {events.find((e) => e.type === "Blacklist Track Alert") && <p className="error">Watchlist alert: {events.find((e) => e.type === "Blacklist Track Alert").track_id} detected. Open the event to review its screenshot.</p>}
               <EventTable events={events} openEvent={openEvent} />
             </Panel>
           </div>
@@ -3036,7 +3072,7 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
                     </div>
                     {s.locked.known &&
                       [
-                        ["Observed for", clock(s.locked.duration)],
+                        ["Observed time", clock(s.locked.observed_seconds ?? s.locked.duration)],
                         ["Direction", s.locked.direction || "—"],
                         ["Last seen", `${s.locked.seconds_since_seen}s ago`],
                         ...(s.locked.max_speed_kmh != null
@@ -3099,6 +3135,7 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
                         >
                           {o.track_id} · {o.object_class}{" "}
                           {Math.round(o.confidence * 100)}%
+                          {o.object_class === "person" && ` · observed ${clock(o.observed_seconds ?? o.duration)}`}
                           {o.speed_kmh != null && ` · ${kmh(o.speed_kmh)}`}
                         </button>
                       ))}
@@ -3106,6 +3143,23 @@ function Live({ run, can, openEvent, cameraId, setCameraId }) {
                   </>
                 )}
               </div>
+            </Panel>
+            <Panel title="Person track watchlist">
+              <p className="notice">Watch a person track in this camera session. On its next detection, ARGUS saves a screenshot and creates a high priority event. Track IDs reset when the session restarts.</p>
+              {can("operate") && <form className="inline" onSubmit={(e) => { e.preventDefault(); run(async () => { await api(`/cameras/${cam.id}/watchlist`, {method:"POST",body:{track_id:watchTrack,label:watchLabel}}); setWatchLabel(""); setWatchTrack(""); setWatchlist(await api(`/cameras/${cam.id}/watchlist`)); }); }}>
+                <select aria-label="Person track" required value={watchTrack} onChange={(e) => setWatchTrack(e.target.value)}><option value="">Select person</option>{(s.visible || []).filter((o) => o.object_class === "person").map((o) => <option key={o.track_id} value={o.track_id}>{o.track_id} · {clock(o.observed_seconds ?? o.duration)} observed</option>)}</select>
+                <input aria-label="Watchlist label" required placeholder="Reason or case label" value={watchLabel} onChange={(e) => setWatchLabel(e.target.value)} />
+                <button>Add to watchlist</button>
+              </form>}
+              {watchlist.filter((w) => w.job_id === s.job_id).map((w) => <div className="stat-row" key={w.id}><span>{w.track_id} · {w.label} · {w.alerted ? "Alert captured" : "Watching"}</span>{can("operate") && <button onClick={() => run(async () => { await api(`/cameras/${cam.id}/watchlist/${w.id}`,{method:"DELETE"}); setWatchlist(await api(`/cameras/${cam.id}/watchlist`)); })}>Remove</button>}</div>)}
+            </Panel>
+            <Panel title="Camera location">
+              <p>{cam.location?.name || "Location not set"}</p>
+              {can("configure") && <form className="form-grid" onSubmit={(e) => { e.preventDefault(); run(async () => { await api(`/videos/${cam.video_id}/location`,{method:"PUT",body:cameraLocation}); load(); }); }}>
+                <label>Location name<input required value={cameraLocation.name} onChange={(e) => setCameraLocation({...cameraLocation,name:e.target.value})} /></label>
+                {["latitude","longitude"].map((k) => <label key={k}>{k}<input type="number" step="any" required value={cameraLocation[k]} onChange={(e) => setCameraLocation({...cameraLocation,[k]:+e.target.value})} /></label>)}
+                <button>Save camera point</button>
+              </form>}
             </Panel>
             {cam.mode === "Convoy" && (
               <Panel title="Convoy status">
@@ -3789,7 +3843,7 @@ function TrackTable({ tracks, openVideo }) {
             <th>CLASS</th>
             <th>VIDEO / MODE</th>
             <th>FIRST SEEN</th>
-            <th>DURATION</th>
+            <th>OBSERVED TIME</th>
             <th>DIRECTION</th>
             <th>CONVOY</th>
             <th />
@@ -3807,7 +3861,7 @@ function TrackTable({ tracks, openVideo }) {
                 <small>{t.mode}</small>
               </td>
               <td>{clock(t.first_seen)}</td>
-              <td>{clock(t.duration)}</td>
+              <td>{clock(t.observed_seconds ?? t.duration)}</td>
               <td>{t.direction || "—"}</td>
               <td>{t.convoy_role || "—"}</td>
               <td>
@@ -4074,9 +4128,15 @@ function Incidents({ run, can, openEvent }) {
             </button>
           ))
         ) : (
-          <Empty>
-            Verify an event, then create an incident from its review page.
-          </Empty>
+          <div className="stack">
+            <p className="notice">Sample incidents below show how reports appear. They are examples, not live records.</p>
+            {[
+              ["SAMPLE-001", "Crowding at Meskel Square", "HIGH", "RESPONDING"],
+              ["SAMPLE-002", "Stopped vehicle on Bole Road", "MEDIUM", "ASSIGNED"],
+              ["SAMPLE-003", "Camera offline near Piazza", "HIGH", "MONITORING"],
+            ].map(([number,title,priority,state]) => <div className="record" key={number}><div><small>{number} · DEMO</small><strong>{title}</strong><small>{priority} priority · Addis Ababa</small></div><Badge value={state} /></div>)}
+            <small>Verify an event and create an incident to add a real report.</small>
+          </div>
         )}
       </Panel>
       <Panel title={current?.number || "Incident workspace"}>
@@ -4549,7 +4609,7 @@ function Analytics({ run, revision }) {
     </>
   );
 }
-function GIS({ videos, run, openVideo }) {
+function GIS({ videos, run, openVideo, openCamera }) {
   const holder = useRef(null),
     mapRef = useRef(null),
     [id, setId] = useState(""),
@@ -4558,9 +4618,10 @@ function GIS({ videos, run, openVideo }) {
       latitude: 9.03,
       longitude: 38.74,
     }),
-    [layer, setLayer] = useState("analysis"),
+    [layer, setLayer] = useState("cameras"),
     [incidents, setIncidents] = useState([]),
     [events, setEvents] = useState([]),
+    [cameras, setCameras] = useState([]),
     [localVideos, setLocalVideos] = useState(videos);
   useEffect(() => {
     setLocalVideos(videos);
@@ -4569,6 +4630,7 @@ function GIS({ videos, run, openVideo }) {
     run(async () => {
       setIncidents(await api("/incidents"));
       setEvents(await api("/events"));
+      setCameras(await api("/cameras"));
     });
   }, []);
   useEffect(() => {
@@ -4608,7 +4670,9 @@ function GIS({ videos, run, openVideo }) {
       mapRef.current = map;
       map.addControl(new maplibre.NavigationControl());
       const items =
-        layer === "analysis"
+        layer === "cameras"
+          ? cameras.map((c) => ({...c, camera: c}))
+          : layer === "analysis"
           ? localVideos
           : layer === "events"
             ? events.map((e) => ({
@@ -4624,11 +4688,9 @@ function GIS({ videos, run, openVideo }) {
         if (v.location?.longitude == null) continue;
         const button = document.createElement("button");
         button.className = "map-marker";
-        button.textContent =
-          layer === "analysis" ? "V" : layer === "events" ? "E" : "I";
-        button.title = `${v.location.name} · ${v.filename}`;
-        button.onclick = () =>
-          openVideo(v.id, v.event?.video_time ?? null, v.event?.job_id);
+        button.textContent = layer === "cameras" ? "C" : layer === "analysis" ? "V" : layer === "events" ? "E" : "I";
+        button.title = `${v.location.name} · ${v.camera?.name || v.filename}`;
+        button.onclick = () => v.camera ? openCamera(v.camera.id) : openVideo(v.id, v.event?.video_time ?? null, v.event?.job_id);
         new maplibre.Marker({ element: button })
           .setLngLat([v.location.longitude, v.location.latitude])
           .addTo(map);
@@ -4638,18 +4700,18 @@ function GIS({ videos, run, openVideo }) {
       live = false;
       map?.remove();
     };
-  }, [localVideos, layer, events, incidents]);
+  }, [localVideos, layer, events, incidents, cameras]);
   return (
     <>
       <p className="notice">
-        Locations are supplied by an operator. Uploaded videos do not imply
-        known GPS coordinates. Base map requires network access.
+        Addis Ababa camera points use the demonstration coordinates supplied in Live Cameras. Base map requires network access.
       </p>
       <div className="toolbar">
         <label>
           Map layer
           <select value={layer} onChange={(e) => setLayer(e.target.value)}>
             <option value="analysis">Analyses</option>
+            <option value="cameras">Live cameras</option>
             <option value="events">Events</option>
             <option value="incidents">Incidents</option>
           </select>
