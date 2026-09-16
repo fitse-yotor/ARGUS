@@ -472,7 +472,7 @@ def camera_json(c):
 
 @app.get('/api/cameras')
 def cameras(user=Depends(current_user),db=Depends(get_db)):
-    return [camera_json(c) for c in db.scalars(select(Camera).order_by(Camera.created_at))]
+    return [{**camera_json(c),'location':db.get(Video,c.video_id).location} for c in db.scalars(select(Camera).order_by(Camera.created_at))]
 
 @app.post('/api/cameras')
 def add_camera(data:CameraInput,user=Depends(permit('configure')),db=Depends(get_db)):
@@ -482,6 +482,30 @@ def add_camera(data:CameraInput,user=Depends(permit('configure')),db=Depends(get
     cid=uid(); v=Video(filename=data.name,path=f'live://{cid}',metadata_json={'live':True,'width':0,'height':0,'fps':data.fps,'duration':0,'frame_count':0,'file_size':0}); db.add(v); db.flush()
     c=Camera(id=cid,video_id=v.id,url=url,status={},**data.model_dump(exclude={'url'})); db.add(c)
     audit(db,user.username,'camera_added',cid,{'name':data.name,'url':mask(url),'mode':data.mode}); db.commit(); return camera_json(c)
+
+@app.get('/api/cameras/{id}/watchlist')
+def camera_watchlist(id:str,user=Depends(current_user),db=Depends(get_db)):
+    require(db,Camera,id)
+    return [serialize(w) for w in db.scalars(select(WatchTrack).where(WatchTrack.camera_id==id,WatchTrack.active==True).order_by(WatchTrack.created_at.desc()))]
+
+@app.post('/api/cameras/{id}/watchlist')
+def add_watch_track(id:str,data:WatchTrackInput,user=Depends(permit('operate')),db=Depends(get_db)):
+    cam=require(db,Camera,id); job_id=(cam.status or {}).get('job_id')
+    if not job_id or cam.status.get('state')!='LIVE': raise HTTPException(409,'Camera needs a live session')
+    tr=db.scalar(select(Track).where(Track.job_id==job_id,Track.track_id==data.track_id,Track.object_class=='person'))
+    if not tr: raise HTTPException(409,'Person track is still being saved; try again shortly')
+    existing=db.scalar(select(WatchTrack).where(WatchTrack.camera_id==id,WatchTrack.job_id==job_id,WatchTrack.track_id==data.track_id,WatchTrack.active==True))
+    if existing: raise HTTPException(409,'Person track is already on the watchlist')
+    item=WatchTrack(camera_id=id,job_id=job_id,track_id=data.track_id,label=data.label)
+    db.add(item); audit(db,user.username,'watch_track_added',item.id,{'camera_id':id,'track_id':data.track_id}); db.commit()
+    return serialize(item)
+
+@app.delete('/api/cameras/{id}/watchlist/{watch_id}')
+def remove_watch_track(id:str,watch_id:str,user=Depends(permit('operate')),db=Depends(get_db)):
+    item=require(db,WatchTrack,watch_id)
+    if item.camera_id!=id: raise HTTPException(404,'Watch track not found')
+    item.active=False; audit(db,user.username,'watch_track_removed',item.id); db.commit()
+    return serialize(item)
 
 @app.put('/api/cameras/{id}')
 def update_camera(id:str,data:CameraUpdate,user=Depends(permit('configure')),db=Depends(get_db)):
@@ -497,7 +521,7 @@ def update_camera(id:str,data:CameraUpdate,user=Depends(permit('configure')),db=
 
 @app.delete('/api/cameras/{id}')
 def delete_camera(id:str,user=Depends(permit('admin')),db=Depends(get_db)):
-    c=require(db,Camera,id); db.delete(c); audit(db,user.username,'camera_deleted',id,{'name':c.name}); db.commit()
+    c=require(db,Camera,id); db.execute(delete(WatchTrack).where(WatchTrack.camera_id==id)); db.delete(c); audit(db,user.username,'camera_deleted',id,{'name':c.name}); db.commit()
     return {'ok':True,'note':'Recorded events, tracks and clips are retained'}
 
 @app.post('/api/cameras/{id}/lock')
