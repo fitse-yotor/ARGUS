@@ -130,3 +130,7 @@ class SaveDetectionInput(BaseModel):
     def one_source(self):
         if bool(self.job_id)==bool(self.camera_id): raise ValueError('Provide either job_id (recorded video) or camera_id (live camera)')
         return self
+
+class WatchTrackInput(BaseModel):
+    track_id:str=Field(pattern=r'^P-\d{4}$')
+    label:str=Field(min_length=1,max_length=120)

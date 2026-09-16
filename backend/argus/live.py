@@ -6,7 +6,7 @@ from collections import deque
 import cv2
 from sqlalchemy import select, update
 from .config import settings
-from .db import SessionLocal, Camera, Video, Job, Event, Track, Geometry, Service, AIModel, uid
+from .db import SessionLocal, Camera, Video, Job, Event, Track, Geometry, Service, AIModel, WatchTrack, uid
 from .vision import YOLODetector, ByteTracker, normalize, known, resolve_device, CLASSES, COCO_NAMES, ANNOTATE_MODE
 from .analytics import AnalyticsEngine, VEHICLES
 from .convoy import LiveConvoy
@@ -81,12 +81,12 @@ class CameraRunner(threading.Thread):
                 if self.locked:
                     tr=analytics.tracks.get(self.locked); visible=any(o['track_id']==self.locked for o in objects)
                     lock={'track_id':self.locked,'visible':visible and state=='LIVE','known':tr is not None}
-                    if tr: lock.update(object_class=tr['object_class'],first_seen=tr['first_seen'],last_seen=tr['last_seen'],duration=tr['duration'],direction=tr.get('direction'),zones=tr.get('zones',{}),seconds_since_seen=round(time.monotonic()-t0-tr['last_seen'],1),speed_kmh=tr.get('speed_kmh'),max_speed_kmh=tr.get('max_speed_kmh'))
+                    if tr: lock.update(object_class=tr['object_class'],first_seen=tr['first_seen'],last_seen=tr['last_seen'],duration=tr['duration'],observed_seconds=tr.get('observed_seconds',tr['duration']),direction=tr.get('direction'),zones=tr.get('zones',{}),seconds_since_seen=round(time.monotonic()-t0-tr['last_seen'],1),speed_kmh=tr.get('speed_kmh'),max_speed_kmh=tr.get('max_speed_kmh'))
                 rate=(len(recent)-1)/(recent[-1]-recent[0]) if len(recent)>1 and recent[-1]>recent[0] else 0
                 payload=dict(state=state,error=error,job_id=job.id,width=width,height=height,fps=round(rate,2),target_fps=fps,ticks=tick,uptime=round(time.monotonic()-t0),
                              summary={k:summary.get(k) for k in ('people','vehicles','objects','classes','total_classes','total_objects','zones','traffic_state','stopped_vehicles',
                                                                  'calibrated','calibration','traffic_basis','free_flow_kmh','speed_samples','median_speed_kmh','average_speed_kmh','speeding_vehicles','vehicles_per_minute')},
-                             visible=[{'track_id':o['track_id'],'object_class':o['object_class'],'confidence':round(o['confidence'],3),'speed_kmh':o.get('speed_kmh')} for o in objects],
+                             visible=[{'track_id':o['track_id'],'object_class':o['object_class'],'confidence':round(o['confidence'],3),'speed_kmh':o.get('speed_kmh'),'duration':round(o.get('duration',0),1),'observed_seconds':round(o.get('observed_seconds',0),1)} for o in objects],
                              locked=lock,convoy=convoy_status,device=job.config.get('resolved_device'))
                 db.execute(update(Camera).where(Camera.id==self.camera_id).values(status=payload,heartbeat=time.time())); db.commit()
 
@@ -169,6 +169,12 @@ class CameraRunner(threading.Thread):
                     last_seq=seq; last_t=t; tick+=1; recent.append(time.monotonic())
                     tracked=known(tracker.update(detector.detect(frame),t),names)
                     objects=normalize(tracked,width,height,names); summary,events=analytics.step(objects,t)
+                    visible_people={o['track_id']:o for o in objects if o['object_class']=='person'}
+                    for watched in db.scalars(select(WatchTrack).where(WatchTrack.job_id==job.id,WatchTrack.active==True,WatchTrack.alerted==False)):
+                        person=visible_people.get(watched.track_id)
+                        if person:
+                            events.append(dict(type='Blacklist Track Alert',track_id=watched.track_id,object_class='person',confidence=person['confidence'],priority='HIGH',rule={'watch_id':watched.id,'label':watched.label,'scope':'current camera session'},analytics={'observed_seconds':person.get('duration',0)}))
+                            watched.alerted=True
                     if convoy is not None:
                         convoy_events,convoy_status=convoy.step(objects,summary,t,designations,analytics.routes,analytics.calibration)
                         events=events+convoy_events

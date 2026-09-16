@@ -179,3 +179,13 @@ class SavedDetection(Record):
     snapshot: Mapped[str] = mapped_column(Text)
     detections: Mapped[list] = mapped_column(JSON,default=list)
     filters: Mapped[dict] = mapped_column(JSON,default=dict)
+
+class WatchTrack(Record):
+    """A person track watched for the lifetime of one live camera session."""
+    __tablename__ = 'watch_tracks'
+    camera_id: Mapped[str] = mapped_column(ForeignKey('cameras.id'), index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey('jobs.id'), index=True)
+    track_id: Mapped[str] = mapped_column(String(40))
+    label: Mapped[str] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    alerted: Mapped[bool] = mapped_column(Boolean, default=False)

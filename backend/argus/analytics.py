@@ -88,10 +88,17 @@ class AnalyticsEngine:
             tid=o['track_id']; p=o['position']; old=self.previous.get(tid)
             continuous=old and t-old[1]<=self.settings.get('max_gap',1.5)
             if tid not in self.tracks: self.tracks[tid]=dict(first_seen=t,trajectory=[],observations=0,object_class=o['object_class'])
-            tr=self.tracks[tid]; tr.update(last_seen=t,position=p,confidence=o['confidence'],state='ACTIVE',duration=t-tr['first_seen'])
+            tr=self.tracks[tid]
+            sample=1/max(1,self.settings.get('fps',10))
+            previous_seen=tr.get('last_seen')
+            increment=sample
+            if previous_seen is not None and t-previous_seen<=self.settings.get('max_gap',1.5):
+                increment=min(sample*1.5,max(0,t-previous_seen))
+            tr['observed_seconds']=round(tr.get('observed_seconds',0)+increment,3)
+            tr.update(last_seen=t,position=p,confidence=o['confidence'],state='ACTIVE',duration=t-tr['first_seen'])
             tr['observations']+=1; tr['trajectory']=(tr['trajectory']+[[t,*p]])[-600:]
             tr['direction']=direction(tr['trajectory'][max(0,len(tr['trajectory'])-11)][1:],p)
-            o.update(direction=tr['direction'],duration=tr['duration'])
+            o.update(direction=tr['direction'],duration=tr['duration'],observed_seconds=tr['observed_seconds'])
             anchor=self.stationary.get(tid)
             if not continuous or not anchor or math.dist(anchor[0],p)>self.settings.get('stop_distance',.015): self.stationary[tid]=(p,t)
             o['stopped_seconds']=t-self.stationary[tid][1]
