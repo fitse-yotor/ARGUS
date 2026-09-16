@@ -1,5 +1,7 @@
 # ARGUS
 
+<img src="frontend/public/argus-logo.png" alt="ARGUS logo" width="220">
+
 **See. Sense. Understand. Respond.**
 
 A functional local MVP for recorded-video detection, tracking, configurable zone/line analytics, human-reviewed events and incident coordination, plus an explicitly simulated WiFi CSI room.
@@ -8,29 +10,25 @@ A functional local MVP for recorded-video detection, tracking, configurable zone
 
 ## Quick start
 
-Requirements: Python **3.11**, Node **22.12+** (tested with Node 24), approximately 3 GB free for dependencies/model, and additional media storage. CPU works; no RF hardware is needed. FFmpeg is provided by `imageio-ffmpeg`; a system install is optional. The initial model download is about 5.4 MB. No surveillance footage is downloaded.
+Requirements: Python **3.11+**, Node **22.12+** with npm, approximately 3 GB free for dependencies/model, and additional media storage. CPU works; no RF hardware is needed. FFmpeg is provided by `imageio-ffmpeg`; a system install is optional. The initial model download is about 5.4 MB. No surveillance footage is downloaded.
+
+From the repository root, use the single entry point:
 
 ```sh
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-npm ci --prefix frontend
-cp .env.example .env
-python scripts/init_db.py
-python scripts/download_model.py
-python scripts/download_clip.py   # optional, ~600 MB: enables appearance search ("red car")
-python scripts/dev.py
+python start.py
 ```
 
-Open **http://127.0.0.1:5173**. The initializer asks for a unique administrator password unless `ADMIN_PASSWORD` is set in `.env`. Default username: `admin`. Never commit `.env`.
+On Windows, `py -3.11 start.py` also works when `python` points to another version. On Linux/macOS, use `python3 start.py` if the `python` command is unavailable.
 
-For this workspace, a Python environment, downloaded model and SQLite database have already been initialized. A generated administrator password is stored in the local **`.env`** file; read it locally to sign in. The generated credential is not included in documentation or source control.
+The first run creates `.venv` and `.env`, installs Python and frontend packages, migrates the database, downloads the YOLO model, and starts the API, vision worker, live camera service, and web app. Dependency installs are skipped on later runs unless `requirements.txt` or `frontend/package-lock.json` changes. The initializer asks for an administrator password (12+ characters) on first run unless `ADMIN_PASSWORD` is set in `.env`. Default username: `admin`. Keep `.env` private.
 
-If Python 3.11 is unavailable, install it using your usual environment manager, or use `uv venv --python 3.11 .venv` followed by `uv pip install -r requirements.txt`.
+Open **http://127.0.0.1:5173**. Press **Ctrl+C** in the startup terminal to stop all four services. For a later run, use the same `python start.py` command.
+
+Optional appearance search needs a separate ~600 MB CLIP download: `.venv/Scripts/python.exe scripts/download_clip.py` on Windows or `.venv/bin/python scripts/download_clip.py` on Linux/macOS.
 
 ### Run each process separately
 
-From repository root, with the virtual environment active:
+For debugging, you can still run each process separately from the repository root with the virtual environment active. Run `python start.py` once first to complete setup.
 
 ```sh
 # Terminal 1: API
@@ -138,7 +136,7 @@ Open **Live Cameras → Add camera** and paste one of:
 
 Some providers refuse access outside their own player, and ARGUS reports that instead of working around it: **SkylineWebcams** returns a copyright-violation placeholder to other clients, **YouTube** (and **worldcams.tv**, which re-embeds it) requires a signed-in browser session to pass its bot check. Those URLs are rejected when the camera is added.
 
-The live service (`python -m backend.argus.live`, started by `scripts/dev.py`) reads each camera through FFmpeg (RTSP over TCP), keeps only the newest frame so there is no backlog, and runs detection, ByteTrack, zone/line rules, heatmap, lock tracking and appearance crops at the configured analysis FPS. EarthCam pages are re-resolved on every reconnect because their stream tokens expire.
+The live service (`python -m backend.argus.live`, started by `start.py`) reads each camera through FFmpeg (RTSP over TCP), keeps only the newest frame so there is no backlog, and runs detection, ByteTrack, zone/line rules, heatmap, lock tracking and appearance crops at the configured analysis FPS. EarthCam pages are re-resolved on every reconnect because their stream tokens expire.
 
 - The annotated live view is an MJPEG stream (`/api/cameras/{id}/stream`), typically 1–3 s behind real time for HLS sources.
 - **Zones & lines** are drawn on the latest raw frame and applied within about five seconds.
