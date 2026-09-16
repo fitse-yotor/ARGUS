@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: argus
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U argus -d argus']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  init:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment: &env
+      DATABASE_URL: postgresql+psycopg://argus:${POSTGRES_PASSWORD}@db:5432/argus
+      STORAGE_DIR: storage
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      MODEL_PATH: storage/models/yolo11n.pt
+      DEVICE: ${DEVICE:-cpu}
+    volumes: [./storage:/app/storage]
+    depends_on:
+      db: {condition: service_healthy}
+    command: [python, scripts/init_db.py]
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment: *env
+    volumes: [./storage:/app/storage]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    ports: ['127.0.0.1:8000:8000']
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment: *env
+    volumes: [./storage:/app/storage]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    command: [python, -m, backend.argus.worker]
+    restart: unless-stopped
+  live:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment: *env
+    volumes: [./storage:/app/storage]
+    depends_on:
+      init: {condition: service_completed_successfully}
+    command: [python, -m, backend.argus.live]
+    restart: unless-stopped
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    depends_on: [backend]
+    ports: ['127.0.0.1:8080:80']
+volumes:
+  postgres:

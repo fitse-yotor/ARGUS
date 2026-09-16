@@ -1,0 +1,58 @@
+{
+  "hardware": "macOS-15.7.9-x86_64-i386-64bit x86_64",
+  "gpu": {
+    "backend": "MPS",
+    "name": "Apple Metal Performance Shaders",
+    "memory_allocated_mb": 11.4,
+    "utilization_percent": null,
+    "note": "macOS does not expose GPU utilization to PyTorch"
+  },
+  "devices": [
+    "cpu",
+    "mps"
+  ],
+  "threads": 4,
+  "fixture": "Ultralytics bundled bus.jpg resized to each resolution; repeated static image after 3 warm-up frames. Not representative field footage. Decode, database writes and encoding excluded; includes detection, NMS, tracking and analytics.",
+  "results": [
+    {
+      "device": "cpu",
+      "source_resolution": "1280x720",
+      "model_input": "640x640 letterbox",
+      "frames": 30,
+      "mean_latency_seconds": 0.14077232729990405,
+      "p95_latency_seconds": 0.16312480000124197,
+      "processing_fps": 7.103668875698708,
+      "detections_final_frame": 5
+    },
+    {
+      "device": "cpu",
+      "source_resolution": "1920x1080",
+      "model_input": "640x640 letterbox",
+      "frames": 30,
+      "mean_latency_seconds": 0.13259971059997042,
+      "p95_latency_seconds": 0.1410868329985533,
+      "processing_fps": 7.541494589055484,
+      "detections_final_frame": 4
+    },
+    {
+      "device": "mps",
+      "source_resolution": "1280x720",
+      "model_input": "640x640 letterbox",
+      "frames": 30,
+      "mean_latency_seconds": 0.055291875300220755,
+      "p95_latency_seconds": 0.05969035100133624,
+      "processing_fps": 18.08583981950794,
+      "detections_final_frame": 5
+    },
+    {
+      "device": "mps",
+      "source_resolution": "1920x1080",
+      "model_input": "640x640 letterbox",
+      "frames": 30,
+      "mean_latency_seconds": 0.05980792050007343,
+      "p95_latency_seconds": 0.06173472800219315,
+      "processing_fps": 16.720193439910226,
+      "detections_final_frame": 4
+    }
+  ]
+}

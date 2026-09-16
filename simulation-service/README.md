@@ -1,0 +1,2 @@
+# ARGUS Sense provider
+The normalized `SensorProvider` interface and deterministic `SimulatedCSIProvider` live in `backend/argus/simulation.py`. The local MVP hosts this lightweight provider in FastAPI at `/api/simulation`; it does not require a separate daemon. Simulation controls persist mode, speed and a session timeline. Observation updates derive from elapsed time, not random browser data. `RealCSIProvider` deliberately raises NotImplementedError until a calibrated CSI service is connected.
