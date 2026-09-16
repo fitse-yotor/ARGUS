@@ -22,7 +22,6 @@ import {
   ArrowUpRight,
   Users,
   Car,
-  Layers,
   Menu,
   X,
 } from "lucide-react";
@@ -124,7 +123,10 @@ function Metrics({ items }) {
     <div className="metrics">
       {items.map(([name, value], index) => (
         <div className="metric" key={name}>
-          <div className="metric-top"><span>{name}</span>{React.createElement(icons[index % icons.length], { size: 18 })}</div>
+          <div className="metric-top">
+            <span>{name}</span>
+            {React.createElement(icons[index % icons.length], { size: 18 })}
+          </div>
           <strong>{value ?? "—"}</strong>
         </div>
       ))}
@@ -202,10 +204,18 @@ function App() {
   const can = (p) => user.permissions.includes(p);
   return (
     <div className={`shell ${menuOpen ? "menu-open" : ""}`}>
-      {menuOpen && <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && (
+        <button
+          className="nav-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
       <aside>
         <div className="brand">
-          <div className="brand-logo"><img src="/argus-logo.png" alt="ARGUS logo" /></div>
+          <div className="brand-logo">
+            <img src="/argus-logo.png" alt="ARGUS logo" />
+          </div>
           <div>
             ARGUS<small>COMMAND PLATFORM</small>
           </div>
@@ -235,7 +245,14 @@ function App() {
       </aside>
       <main>
         <header>
-          <button className="menu-toggle" aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+          <button
+            className="menu-toggle"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <div className="breadcrumb">
             Workspace <ChevronRight size={13} />
             <span>{page}</span>
@@ -243,7 +260,9 @@ function App() {
           <div className="header-right">
             <span className="status-dot" /> {health.Backend || "CONNECTING"}
             <span className="divider" />
-            <span className="user-avatar" aria-hidden="true">{user.username.slice(0, 2).toUpperCase()}</span>
+            <span className="user-avatar" aria-hidden="true">
+              {user.username.slice(0, 2).toUpperCase()}
+            </span>
             <span>
               {user.username} <small>{user.role}</small>
             </span>
@@ -270,7 +289,9 @@ function App() {
               <p>
                 {page === "ARGUS Sense"
                   ? "RF room simulation · controlled demonstration"
-                  : page === "Overview" ? "Your operations, connected. Your next decision, informed." : "Multi-sensor situational awareness · local operations"}
+                  : page === "Overview"
+                    ? "Your operations, connected. Your next decision, informed."
+                    : "Multi-sensor situational awareness · local operations"}
               </p>
             </div>
             <div className="page-actions">
@@ -377,11 +398,32 @@ function Login({ onLogin, run, error }) {
   return (
     <div className="login">
       <div className="login-brand">
-        <div className="login-logo"><img src="/argus-logo.png" alt="ARGUS — AI-powered multi-sensor situational awareness platform" /></div>
+        <div className="login-logo">
+          <img
+            src="/argus-logo.png"
+            alt="ARGUS — AI-powered multi-sensor situational awareness platform"
+          />
+        </div>
         <div className="eyebrow">INTELLIGENCE. IN PERSPECTIVE.</div>
-        <h1>A clearer picture.<br />A confident response.</h1>
-        <p>Bring vision, sensor intelligence, and investigation together in one command workspace.</p>
-        <div className="login-capabilities"><span><Video size={16} /> Computer vision</span><span><Radio size={16} /> Sensor intelligence</span><span><Shield size={16} /> Human oversight</span></div>
+        <h1>
+          A clearer picture.
+          <br />A confident response.
+        </h1>
+        <p>
+          Bring vision, sensor intelligence, and investigation together in one
+          command workspace.
+        </p>
+        <div className="login-capabilities">
+          <span>
+            <Video size={16} /> Computer vision
+          </span>
+          <span>
+            <Radio size={16} /> Sensor intelligence
+          </span>
+          <span>
+            <Shield size={16} /> Human oversight
+          </span>
+        </div>
       </div>
       <form
         onSubmit={(e) => {
@@ -397,7 +439,9 @@ function Login({ onLogin, run, error }) {
         }}
       >
         <div className="eyebrow">AUTHORIZED ACCESS</div>
-        <div className="login-form-icon"><Shield size={24} /></div>
+        <div className="login-form-icon">
+          <Shield size={24} />
+        </div>
         <h2>Welcome to ARGUS</h2>
         <p>Sign in to your local operational environment.</p>
         <label>
@@ -430,7 +474,15 @@ function Login({ onLogin, run, error }) {
     </div>
   );
 }
-function Overview({ revision, health, openEvent, openVideo, videos, run, navigate }) {
+function Overview({
+  revision,
+  health,
+  openEvent,
+  openVideo,
+  videos,
+  run,
+  navigate,
+}) {
   const [data, setData] = useState(null);
   useEffect(() => {
     run(async () => setData(await api("/analytics")));
@@ -440,14 +492,33 @@ function Overview({ revision, health, openEvent, openVideo, videos, run, navigat
     <>
       <section className="overview-hero">
         <div className="hero-copy">
-          <div className="hero-kicker"><span className="status-dot" /> ARGUS COMMAND CENTER</div>
-          <h2>See the whole picture.<br /><span>Act with confidence.</span></h2>
-          <p>One workspace for your video intelligence, sensor activity, and operational response.</p>
-          <button onClick={() => navigate("Live Cameras")}>Open live cameras <ArrowUpRight size={17} /></button>
+          <div className="hero-kicker">
+            <span className="status-dot" /> ARGUS COMMAND CENTER
+          </div>
+          <h2>
+            See the whole picture.
+            <br />
+            <span>Act with confidence.</span>
+          </h2>
+          <p>
+            One workspace for your video intelligence, sensor activity, and
+            operational response.
+          </p>
+          <button onClick={() => navigate("Live Cameras")}>
+            Open live cameras <ArrowUpRight size={17} />
+          </button>
         </div>
-        <div className="hero-brand"><img src="/argus-logo.png" alt="ARGUS — See. Sense. Understand. Respond." /></div>
+        <div className="hero-brand">
+          <img
+            src="/argus-logo.png"
+            alt="ARGUS — See. Sense. Understand. Respond."
+          />
+        </div>
       </section>
-      <div className="section-heading"><h2>Operational snapshot</h2><span>Recorded analysis & activity</span></div>
+      <div className="section-heading">
+        <h2>Operational snapshot</h2>
+        <span>Recorded analysis & activity</span>
+      </div>
       <Metrics
         items={[
           ["VIDEOS ANALYZED", data.videos_analyzed],
@@ -459,7 +530,37 @@ function Overview({ revision, health, openEvent, openVideo, videos, run, navigat
         ]}
       />
       <div className="workspace-shortcuts">
-        {[["ARGUS Vision", "Analyze & understand", "Detection, tracking, and video intelligence", Crosshair], ["Investigation", "Find what matters", "Search observations and review evidence", Search], ["GIS Command", "Connect the context", "Explore sources in your map workspace", Map]].map(([target, title, description, Icon]) => <button key={target} onClick={() => navigate(target)}><div className="shortcut-icon"><Icon size={21} /></div><div><strong>{title}</strong><small>{description}</small></div><ArrowUpRight size={17} /></button>)}
+        {[
+          [
+            "ARGUS Vision",
+            "Analyze & understand",
+            "Detection, tracking, and video intelligence",
+            Crosshair,
+          ],
+          [
+            "Investigation",
+            "Find what matters",
+            "Search observations and review evidence",
+            Search,
+          ],
+          [
+            "GIS Command",
+            "Connect the context",
+            "Explore sources in your map workspace",
+            Map,
+          ],
+        ].map(([target, title, description, Icon]) => (
+          <button key={target} onClick={() => navigate(target)}>
+            <div className="shortcut-icon">
+              <Icon size={21} />
+            </div>
+            <div>
+              <strong>{title}</strong>
+              <small>{description}</small>
+            </div>
+            <ArrowUpRight size={17} />
+          </button>
+        ))}
       </div>
       <div className="grid-two">
         <Panel
